@@ -1,7 +1,7 @@
-## Interface: 11302
-## Title: Needs Food Badly
-## Author: Jeff Shipley
-## Version: 0.4.1
+## Interface: 90200
+## Title: Needs Food Badly Plus
+## Author: Se7enMuting
+## Version: 1.0.0
 
 main.lua
 data.lua

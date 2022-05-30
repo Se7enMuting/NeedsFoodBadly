@@ -3,11 +3,11 @@
         * Give option to treat buff food as low priority regular food
         * Allow other buff foods (eg agi/str), and let user prioritize them
         * Allow custom macro templates
-        * Prefer PVP potions/bandages in battlegrounds (they're ignored for now)
+        * Prefer PVP potions in battlegrounds (they're ignored for now)
 ]]
 
 local defaultFoodMacro = [[#showtooltip
-/use [mod:shift]<bandage>;[nocombat,mod]<buffFood>;[nocombat]<food>
+/use [nocombat,mod]<buffFood>;[nocombat]<food>
 /castsequence [combat,nomod]<hPotions>
 ]]
 local defaultDrinkMacro = [[#showtooltip
@@ -30,8 +30,7 @@ NeedsFoodBadly:RegisterEvent("PLAYER_REGEN_ENABLED")
 NeedsFoodBadly:RegisterEvent("PLAYER_LEVEL_UP")
 NeedsFoodBadly.BEST = {
 	food = {}, buffFood = {}, drink = {}, buffDrink = {},
-	hPotion = {}, mPotion = {}, healthstone = {}, manaGem = {},
-	bandage = {}
+	hPotion = {}, mPotion = {}, healthstone = {}
 };
 
 NeedsFoodBadly.dirty = false
@@ -51,8 +50,7 @@ end)
 function NeedsFoodBadly:UpdateMacros()
     local best = {
         food = {}, buffFood = {}, drink = {}, buffDrink = {},
-        hPotion = {}, mPotion = {}, healthstone = {}, manaGem = {},
-        bandage = {}
+        hPotion = {}, mPotion = {}, healthstone = {}
     }
     for bag = 0,4 do
         for slot = 1,GetContainerNumSlots(bag) do
@@ -78,12 +76,6 @@ function NeedsFoodBadly:UpdateMacros()
             if not best.healthstone[id] and self:IsUsableHealthstone(self.Healthstone[id]) then
                 best.healthstone[id] = self.Healthstone[id]
             end
-            if not best.manaGem[id] and self:IsUsableManaGem(self.ManaGem[id]) then
-                best.manaGem[id] = self.ManaGem[id]
-            end
-            if not best.bandage[id] and self:IsUsableBandage(self.Bandage[id]) then
-                best.bandage[id] = self.Bandage[id]
-            end
         end
     end
     best.food = self:Sorted(best.food, self.BetterFood)
@@ -93,8 +85,6 @@ function NeedsFoodBadly:UpdateMacros()
     best.hPotion = self:Sorted(best.hPotion, self.BetterHPotion)
     best.mPotion = self:Sorted(best.mPotion, self.BetterMPotion)
     best.healthstone = self:Sorted(best.healthstone, self.BetterHealthstone)
-    best.manaGem = self:Sorted(best.manaGem, self.BetterManaGem)
-    best.bandage = self:Sorted(best.bandage, self.BetterBandage)
 	-- if we don't have food, use buff food instead
 	if (not best.food[1]) then
 		best.food = best.buffFood;
@@ -105,13 +95,12 @@ function NeedsFoodBadly:UpdateMacros()
     foodMacro = defaultFoodMacro:gsub("<%a+>", {
         ["<food>"] = 'item:'..tostring(best.food[1] and best.food[1].id or 0),
         ["<buffFood>"] = 'item:'..tostring(best.buffFood[1] and best.buffFood[1].id or 0),
-        ["<bandage>"] = 'item:'..tostring(best.bandage[1] and best.bandage[1].id or 0),
         ["<hPotions>"] = self:BuildSequence(best.healthstone, best.hPotion)
     })
     drinkMacro = defaultDrinkMacro:gsub("<%a+>", {
         ["<drink>"] = 'item:'..tostring(best.drink[1] and best.drink[1].id or 0),
         ["<manaBuff>"] = 'item:'..tostring(best.buffDrink[1] and best.buffDrink[1].id or 0),
-        ["<mPotions>"] = self:BuildSequence(best.manaGem, best.mPotion)
+        ["<mPotions>"] = self:BuildSequence(best.mPotion, best.mPotion)
     })
     CreateOrUpdateMacro("NFB_Food", foodMacro);
     CreateOrUpdateMacro("NFB_Drink", drinkMacro);
@@ -173,11 +162,6 @@ function NeedsFoodBadly:IsUsableHealthstone(healthstone)
         and healthstone.lvl <= UnitLevel("player"))
 end
 
-function NeedsFoodBadly:IsUsableManaGem(manaGem)
-    return not not (manaGem
-        and manaGem.lvl <= UnitLevel("player"))
-end
-
 local function FirstAidSkillPoints()
     for i = 1, GetNumSkillLines() do
         local skillName, _, _, skillRank, numTempPoints, skillModifier = GetSkillLineInfo(i)
@@ -188,12 +172,6 @@ local function FirstAidSkillPoints()
     return 0
 end
 
-function NeedsFoodBadly:IsUsableBandage(bandage)
-    return not not (bandage
-    	and bandage.skill <= FirstAidSkillPoints()
-	and not bandage.bg)
-end
-
 function NeedsFoodBadly.BetterFood(a, b)
     if a.conj and not b.conj then
         return true
@@ -202,8 +180,8 @@ function NeedsFoodBadly.BetterFood(a, b)
     end
     -- Percent food is stored as a decimal number, ie "Restores 2% health" is hp=0.02
     a_hp, b_hp = a.hp, b.hp
-    if a_hp < 1 then a_hp = UnitHealthMax("player") * a_hp end
-    if b_hp < 1 then b_hp = UnitHealthMax("player") * b_hp end
+    if a_hp <= 1 then a_hp = UnitHealthMax("player") * a_hp end
+    if b_hp <= 1 then b_hp = UnitHealthMax("player") * b_hp end
     return (a_hp > b_hp) or (a_hp == b_hp and GetItemCount(a.id) < GetItemCount(b.id))
 end
 
@@ -218,8 +196,8 @@ function NeedsFoodBadly.BetterDrink(a, b)
         return false
     end
     a_mp, b_mp = a.mp, b.mp
-    if a_mp < 1 then a_mp = UnitHealthMax("player") * a_mp end
-    if b_mp < 1 then b_mp = UnitHealthMax("player") * b_mp end
+    if a_mp <= 1 then a_mp = UnitHealthMax("player") * a_mp end
+    if b_mp <= 1 then b_mp = UnitHealthMax("player") * b_mp end
     return a_mp > b_mp or (a_mp == b_mp and GetItemCount(a.id) < GetItemCount(b.id))
 end
 
@@ -236,19 +214,6 @@ function NeedsFoodBadly.BetterMPotion(a, b)
 end
 
 function NeedsFoodBadly.BetterHealthstone(a, b)
-    return a.hp > b.hp
-end
-
-function NeedsFoodBadly.BetterManaGem(a, b)
-    return a.high > b.high
-end
-
-function NeedsFoodBadly.BetterBandage(a, b)
-    if a.bg and not b.bg then
-        return true
-    elseif b.bg and not a.bg then
-        return false
-    end
     return a.hp > b.hp
 end
 
