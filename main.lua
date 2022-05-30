@@ -8,11 +8,11 @@
 
 local defaultFoodMacro = [[#showtooltip
 /use [mod:shift]<bandage>;[nocombat,mod]<buffFood>;[nocombat]<food>
-/castsequence [combat]<hPotions>
+/castsequence [combat,nomod]<hPotions>
 ]]
 local defaultDrinkMacro = [[#showtooltip
 /use [nocombat,mod]<manaBuff>;[nocombat]<drink>
-/castsequence [combat]<mPotions>
+/castsequence [combat,nomod]<mPotions>
 ]]
 
 local function CreateOrUpdateMacro(macroName, text)
@@ -28,6 +28,11 @@ NeedsFoodBadly = CreateFrame("frame")
 NeedsFoodBadly:RegisterEvent("BAG_UPDATE_DELAYED")
 NeedsFoodBadly:RegisterEvent("PLAYER_REGEN_ENABLED")
 NeedsFoodBadly:RegisterEvent("PLAYER_LEVEL_UP")
+NeedsFoodBadly.BEST = {
+	food = {}, buffFood = {}, drink = {}, buffDrink = {},
+	hPotion = {}, mPotion = {}, healthstone = {}, manaGem = {},
+	bandage = {}
+};
 
 NeedsFoodBadly.dirty = false
 NeedsFoodBadly:SetScript("OnEvent", function (self, event, ...)
@@ -90,6 +95,13 @@ function NeedsFoodBadly:UpdateMacros()
     best.healthstone = self:Sorted(best.healthstone, self.BetterHealthstone)
     best.manaGem = self:Sorted(best.manaGem, self.BetterManaGem)
     best.bandage = self:Sorted(best.bandage, self.BetterBandage)
+	-- if we don't have food, use buff food instead
+	if (not best.food[1]) then
+		best.food = best.buffFood;
+	end
+	if (not best.drink[1]) then
+		best.drink = best.buffDrink;
+	end
     foodMacro = defaultFoodMacro:gsub("<%a+>", {
         ["<food>"] = 'item:'..tostring(best.food[1] and best.food[1].id or 0),
         ["<buffFood>"] = 'item:'..tostring(best.buffFood[1] and best.buffFood[1].id or 0),
@@ -101,8 +113,10 @@ function NeedsFoodBadly:UpdateMacros()
         ["<manaBuff>"] = 'item:'..tostring(best.buffDrink[1] and best.buffDrink[1].id or 0),
         ["<mPotions>"] = self:BuildSequence(best.manaGem, best.mPotion)
     })
-    CreateOrUpdateMacro("NFB_Food", foodMacro)
-    CreateOrUpdateMacro("NFB_Drink", drinkMacro)
+    CreateOrUpdateMacro("NFB_Food", foodMacro);
+    CreateOrUpdateMacro("NFB_Drink", drinkMacro);
+	-- make food lists available externally
+	NeedsFoodBadly.BEST = best;
 end
 
 function NeedsFoodBadly:Sorted(t, f)
@@ -190,11 +204,11 @@ function NeedsFoodBadly.BetterFood(a, b)
     a_hp, b_hp = a.hp, b.hp
     if a_hp < 1 then a_hp = UnitHealthMax("player") * a_hp end
     if b_hp < 1 then b_hp = UnitHealthMax("player") * b_hp end
-    return (a_hp > b_hp) or (a_hp == b_hp and GetItemCount(a.id) <= GetItemCount(b.id))
+    return (a_hp > b_hp) or (a_hp == b_hp and GetItemCount(a.id) < GetItemCount(b.id))
 end
 
 function NeedsFoodBadly.BetterBuffFood(a, b)
-    return a.stam > b.stam or (a.stam == b.stam and GetItemCount(a.id) <= GetItemCount(b.id))
+    return a.stam > b.stam or (a.stam == b.stam and GetItemCount(a.id) < GetItemCount(b.id))
 end
 
 function NeedsFoodBadly.BetterDrink(a, b)
@@ -206,27 +220,27 @@ function NeedsFoodBadly.BetterDrink(a, b)
     a_mp, b_mp = a.mp, b.mp
     if a_mp < 1 then a_mp = UnitHealthMax("player") * a_mp end
     if b_mp < 1 then b_mp = UnitHealthMax("player") * b_mp end
-    return a_mp > b_mp or (a_mp == b_mp and GetItemCount(a.id) <= GetItemCount(b.id))
+    return a_mp > b_mp or (a_mp == b_mp and GetItemCount(a.id) < GetItemCount(b.id))
 end
 
 function NeedsFoodBadly.BetterBuffDrink(a, b)
-    return a.mp5 > b.mp5 or (a.mp5 == b.mp5 and GetItemCount(a.id) <= GetItemCount(b.id))
+    return a.mp5 > b.mp5 or (a.mp5 == b.mp5 and GetItemCount(a.id) < GetItemCount(b.id))
 end
 
 function NeedsFoodBadly.BetterHPotion(a, b)
-    return a.high >= b.high
+    return a.high > b.high
 end
 
 function NeedsFoodBadly.BetterMPotion(a, b)
-    return a.high >= b.high
+    return a.high > b.high
 end
 
 function NeedsFoodBadly.BetterHealthstone(a, b)
-    return a.hp >= b.hp
+    return a.hp > b.hp
 end
 
 function NeedsFoodBadly.BetterManaGem(a, b)
-    return a.high >= b.high
+    return a.high > b.high
 end
 
 function NeedsFoodBadly.BetterBandage(a, b)
@@ -235,7 +249,7 @@ function NeedsFoodBadly.BetterBandage(a, b)
     elseif b.bg and not a.bg then
         return false
     end
-    return a.hp >= b.hp
+    return a.hp > b.hp
 end
 
 function NeedsFoodBadly:BuildSequence(stone, potions)
